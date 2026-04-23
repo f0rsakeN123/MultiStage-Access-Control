@@ -1,91 +1,228 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Access Control | SecureGate</title>
+    <title>SecureGate Enterprise IAM</title>
     <style>
-        body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { background: #0f0f0f; padding: 40px; border-radius: 8px; border-left: 5px solid #0078d4; width: 450px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
-        .btn { background: #0078d4; color: white; padding: 12px 25px; text-decoration: none; border-radius: 3px; display: inline-block; margin-top: 20px; font-weight: bold; border: none; cursor: pointer; }
-        #loader { border: 3px solid #222; border-top: 3px solid #0078d4; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .key-display { background: #000; padding: 15px; border: 1px solid #0078d4; color: #00ecff; font-family: 'Courier New', monospace; margin: 20px 0; font-size: 1.2em; text-align: center; }
-        .role-tag { font-size: 0.8em; text-transform: uppercase; letter-spacing: 2px; color: #888; }
+        body { background: #0a0b10; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background: #1a1d2d; padding: 40px; border-radius: 12px; border-top: 4px solid #3b82f6; width: 90%; max-width: 600px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+        h1, h2 { color: #fff; margin-top: 0; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; background: #0f111a; border: 1px solid #2d3748; color: white; border-radius: 6px; box-sizing: border-box; }
+        .btn { background: #3b82f6; color: white; padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
+        .btn:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; width: auto; padding: 6px 12px; margin: 2px; font-size: 0.8em; }
+        .btn-success { background: #10b981; width: auto; padding: 6px 12px; margin: 2px; font-size: 0.8em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #2d3748; padding: 10px; text-align: left; font-size: 0.9em; }
+        th { background: #2d3748; color: #a0aec0; text-transform: uppercase; }
+        .hidden { display: none; }
+        #msg { color: #f59e0b; margin-top: 15px; font-size: 0.9em; text-align: center; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8em; background: #4b5563; }
     </style>
 </head>
 <body>
-    <div class="box" id="app">
-        <span class="role-tag" id="role-tag">Initializing...</span>
-        <h2 id="title">Security Clearance</h2>
-        <div id="loader"></div>
-        <p id="msg">Scanning network environment...</p>
+
+<div class="container" id="app">
+    <div id="view-login">
+        <h2>Sustav za autorizaciju</h2>
+        <p>Prijavite se pomoću službene e-mail adrese.</p>
+        <input type="email" id="email" placeholder="vas.email@domena.com">
+        <select id="role-select">
+            <option value="Klijent">Klijent</option>
+            <option value="Djelatnik">Djelatnik (Zahtijeva odobrenje)</option>
+        </select>
+        <button class="btn" onclick="requestLogin()">POŠALJI KOD</button>
+        <div id="login-msg" id="msg"></div>
     </div>
 
-    <script>
-        const params = new URLSearchParams(window.location.search);
-        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzqR4dexdWGuNLU27PzeFAfPlKC7tG2-x4oQHnBY14d40RRjZ4tGsD7hEhpLWtpX-_pXw/exec";
+    <div id="view-otp" class="hidden">
+        <h2>Verifikacija</h2>
+        <p>Unesite 6-znamenkasti kod koji smo poslali na vaš e-mail.</p>
+        <input type="text" id="otp-code" placeholder="123456" maxlength="6">
+        <button class="btn" onclick="verifyOTP()">POTVRDI KOD</button>
+        <div id="otp-msg" id="msg"></div>
+    </div>
+
+    <div id="view-dashboard" class="hidden">
+        <h2 id="dash-title">Nadzorna ploča</h2>
+        <p id="dash-role" style="color: #60a5fa; font-weight: bold;"></p>
         
-        const AUTH_LEVELS = {
-            "Level_1": { name: "Client", color: "#888" },
-            "Level_2": { name: "Associate Specialist", color: "#0078d4" },
-            "Level_3": { name: "Chief Security Officer", color: "#ffaa00" },
-            "Level_4": { name: "Executive Director", color: "#ff4d4d" }
-        };
+        <div id="pending-alert" class="hidden" style="background: #78350f; padding: 15px; border-radius: 6px; border: 1px solid #d97706;">
+            <strong>Račun na čekanju!</strong> Administrator mora odobriti vaš pristup sustavu. Molimo pokušajte kasnije.
+        </div>
 
-        async function init()
+        <div id="data-table-container" class="hidden">
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Uloga</th>
+                        <th>Status</th>
+                        <th>Akcije</th>
+                    </tr>
+                </thead>
+                <tbody id="users-tbody"></tbody>
+            </table>
+        </div>
+        <button class="btn" style="background: #4b5563; margin-top: 30px;" onclick="location.reload()">ODJAVA</button>
+    </div>
+</div>
+
+<script>
+    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbydTSRsmxdCkurIcQqfPPq88UdAbJ4J9U_GNJP7ezcSQxEfgsNN3RDRiNXNIuSromzYyQ/exec";
+    let sessionToken = "";
+    let userEmail = "";
+
+    async function requestLogin()
+    {
+        userEmail = document.getElementById("email").value;
+        const role = document.getElementById("role-select").value;
+        const msgDiv = document.getElementById("login-msg");
+        
+        if(!userEmail)
         {
-            const authParam = params.get("Auth");
-            const envCheck = params.get("Env");
+            msgDiv.innerText = "Unesite email.";
+            return;
+        }
 
-            if(!authParam || !AUTH_LEVELS[authParam])
-            {
-                showError("ACCESS DENIED", "Unauthorized entry attempt detected.");
-                return;
-            }
-
-            const currentRole = AUTH_LEVELS[authParam];
-            document.getElementById("role-tag").innerText = currentRole.name;
-            document.getElementById("role-tag").style.color = currentRole.color;
-
-            if(!envCheck)
-            {
-                setTimeout(function()
-                {
-                    showError("VERIFICATION FAILED", "External environment handshake missing.");
-                }, 2000);
-                return;
-            }
-
-            document.getElementById("msg").innerText = "Validating credentials for " + currentRole.name + "...";
+        msgDiv.innerText = "Slanje koda na email...";
+        
+        try
+        {
+            const res = await fetch(GOOGLE_URL + "?action=request_otp&email=" + encodeURIComponent(userEmail) + "&role=" + role);
+            const data = await res.json();
             
-            setTimeout(function()
+            if(data.success)
             {
-                generateToken(authParam);
-            }, 3000);
+                document.getElementById("view-login").classList.add("hidden");
+                document.getElementById("view-otp").classList.remove("hidden");
+            }
+            else
+            {
+                msgDiv.innerText = data.error;
+            }
         }
-
-        async function generateToken(level)
+        catch(e)
         {
-            try
+            msgDiv.innerText = "Greška u komunikaciji sa serverom.";
+        }
+    }
+
+    async function verifyOTP()
+    {
+        const code = document.getElementById("otp-code").value;
+        const msgDiv = document.getElementById("otp-msg");
+        
+        msgDiv.innerText = "Provjera koda...";
+        
+        try
+        {
+            const res = await fetch(GOOGLE_URL + "?action=verify_otp&email=" + encodeURIComponent(userEmail) + "&code=" + code);
+            const data = await res.json();
+            
+            if(data.success)
             {
-                const res = await fetch(GOOGLE_URL + "?type=generate&role=" + level);
-                const data = await res.json();
+                sessionToken = data.token;
+                document.getElementById("view-otp").classList.add("hidden");
+                document.getElementById("view-dashboard").classList.remove("hidden");
+                loadDashboard();
+            }
+            else
+            {
+                msgDiv.innerText = data.error;
+            }
+        }
+        catch(e)
+        {
+            msgDiv.innerText = "Greška u komunikaciji.";
+        }
+    }
+
+    async function loadDashboard()
+    {
+        try
+        {
+            const res = await fetch(GOOGLE_URL + "?action=get_dashboard&token=" + sessionToken);
+            const data = await res.json();
+            
+            if(data.pending)
+            {
+                document.getElementById("dash-title").innerText = "Pristup Ograničen";
+                document.getElementById("pending-alert").classList.remove("hidden");
+                return;
+            }
+            
+            if(data.success)
+            {
+                document.getElementById("dash-role").innerText = "Vaša razina pristupa: " + data.role;
                 
-                document.getElementById("app").innerHTML = "<span class='role-tag' style='color:" + AUTH_LEVELS[level].color + "'>" + AUTH_LEVELS[level].name + "</span><h2 style='color:#00ecff'>Token Authorized</h2><p>Single-use session token generated:</p><div class='key-display'>" + data.key + "</div><button class='btn' onclick=\"navigator.clipboard.writeText('" + data.key + "').then(()=>alert('Token Copied'))\">COPY TOKEN</button><p style='font-size:0.7em; color:#555; margin-top:15px;'>Valid for 1 high-security session only.</p>";
-            }
-            catch(e)
-            {
-                showError("SERVER ERROR", "Authorization server is offline.");
+                if(data.role === "Klijent")
+                {
+                    document.getElementById("data-table-container").innerHTML = "<p>Dobrodošli u klijentski portal. Trenutno nemate aktivnih usluga.</p>";
+                    document.getElementById("data-table-container").classList.remove("hidden");
+                }
+                else
+                {
+                    buildTable(data.users);
+                    document.getElementById("data-table-container").classList.remove("hidden");
+                }
             }
         }
-
-        function showError(title, msg)
+        catch(e)
         {
-            document.getElementById("app").innerHTML = "<h2 style='color:#ff4d4d'>" + title + "</h2><p>" + msg + "</p>";
+            alert("Greška pri učitavanju podataka.");
         }
+    }
 
-        init();
-    </script>
+    function buildTable(users)
+    {
+        const tbody = document.getElementById("users-tbody");
+        tbody.innerHTML = "";
+        
+        for(const email in users)
+        {
+            const u = users[email];
+            let actionsHtml = "";
+            
+            if(u.status === "pending")
+            {
+                actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'approve')\">Odobri</button>";
+                actionsHtml += "<button class='btn btn-danger' onclick=\"manageUser('" + email + "', 'delete')\">Odbij</button>";
+            }
+            else
+            {
+                if(u.role === "Djelatnik")
+                {
+                    actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'promote')\">Unaprijedi</button>";
+                }
+                actionsHtml += "<button class='btn btn-danger' onclick=\"manageUser('" + email + "', 'delete')\">Obriši</button>";
+            }
+            
+            const tr = document.createElement("tr");
+            tr.innerHTML = "<td>" + email + "</td><td><span class='badge'>" + u.role + "</span></td><td>" + u.status + "</td><td>" + actionsHtml + "</td>";
+            tbody.appendChild(tr);
+        }
+    }
+
+    async function manageUser(targetEmail, type)
+    {
+        if(!confirm("Jeste li sigurni da želite izvršiti ovu akciju nad " + targetEmail + "?"))
+        {
+            return;
+        }
+        
+        try
+        {
+            await fetch(GOOGLE_URL + "?action=manage_user&token=" + sessionToken + "&target=" + encodeURIComponent(targetEmail) + "&type=" + type);
+            loadDashboard();
+        }
+        catch(e)
+        {
+            alert("Greška pri izvršavanju akcije.");
+        }
+    }
+</script>
+
 </body>
 </html>
