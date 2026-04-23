@@ -49,7 +49,7 @@
         <p id="dash-role" style="color: #60a5fa; font-weight: bold;"></p>
         
         <div id="pending-alert" class="hidden" style="background: #78350f; padding: 15px; border-radius: 6px; border: 1px solid #d97706;">
-            <strong>Račun na čekanju!</strong> Administrator mora odobriti vaš pristup sustavu. Molimo pokušajte kasnije.
+            <strong>Račun na čekanju!</strong> Administrator mora odobriti vaš pristup sustavu.
         </div>
 
         <div id="data-table-container" class="hidden">
@@ -65,14 +65,60 @@
                 <tbody id="users-tbody"></tbody>
             </table>
         </div>
-        <button class="btn" style="background: #4b5563; margin-top: 30px;" onclick="location.reload()">ODJAVA</button>
+        <button class="btn" style="background: #4b5563; margin-top: 30px;" onclick="logout()">ODJAVA</button>
     </div>
 </div>
 
 <script>
-    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbydTSRsmxdCkurIcQqfPPq88UdAbJ4J9U_GNJP7ezcSQxEfgsNN3RDRiNXNIuSromzYyQ/exec";
+    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwAkuv4CPBMEQgyuKdRF76FeHe1D9XnOYG6zpWGXkdrkqp7JTT8t1gfsV8xESAvvJpUCQ/exec"; 
     let sessionToken = "";
     let userEmail = "";
+    let autoRefreshInterval;
+
+    window.onload = function()
+    {
+        const savedToken = localStorage.getItem("sessionToken");
+        const savedEmail = localStorage.getItem("userEmail");
+        
+        if(savedToken && savedEmail)
+        {
+            sessionToken = savedToken;
+            userEmail = savedEmail;
+            
+            document.getElementById("view-login").classList.add("hidden");
+            document.getElementById("view-dashboard").classList.remove("hidden");
+            
+            loadDashboard();
+            startAutoRefresh();
+        }
+    };
+
+    function startAutoRefresh()
+    {
+        if(autoRefreshInterval)
+        {
+            clearInterval(autoRefreshInterval);
+        }
+        
+        autoRefreshInterval = setInterval(function()
+        {
+            if(sessionToken)
+            {
+                loadDashboard(true);
+            }
+        }, 3000);
+    }
+
+    function logout()
+    {
+        localStorage.removeItem("sessionToken");
+        localStorage.removeItem("userEmail");
+        if(autoRefreshInterval)
+        {
+            clearInterval(autoRefreshInterval);
+        }
+        location.reload();
+    }
 
     async function requestLogin()
     {
@@ -124,9 +170,15 @@
             if(data.success)
             {
                 sessionToken = data.token;
+                
+                localStorage.setItem("sessionToken", sessionToken);
+                localStorage.setItem("userEmail", userEmail);
+                
                 document.getElementById("view-otp").classList.add("hidden");
                 document.getElementById("view-dashboard").classList.remove("hidden");
+                
                 loadDashboard();
+                startAutoRefresh();
             }
             else
             {
@@ -139,12 +191,18 @@
         }
     }
 
-    async function loadDashboard()
+    async function loadDashboard(isAutoRefresh = false)
     {
         try
         {
             const res = await fetch(GOOGLE_URL + "?action=get_dashboard&token=" + sessionToken);
             const data = await res.json();
+            
+            if(data.success === false)
+            {
+                logout();
+                return;
+            }
             
             if(data.pending)
             {
@@ -155,7 +213,10 @@
             
             if(data.success)
             {
-                document.getElementById("dash-role").innerText = "Vaša razina pristupa: " + data.role;
+                if(!isAutoRefresh)
+                {
+                    document.getElementById("dash-role").innerText = "Vaša razina pristupa: " + data.role;
+                }
                 
                 if(data.role === "Klijent")
                 {
@@ -164,18 +225,21 @@
                 }
                 else
                 {
-                    buildTable(data.users);
+                    buildTable(data.users, data.role);
                     document.getElementById("data-table-container").classList.remove("hidden");
                 }
             }
         }
         catch(e)
         {
-            alert("Greška pri učitavanju podataka.");
+            if(!isAutoRefresh)
+            {
+                alert("Greška pri učitavanju podataka.");
+            }
         }
     }
 
-    function buildTable(users)
+    function buildTable(users, currentUserRole)
     {
         const tbody = document.getElementById("users-tbody");
         tbody.innerHTML = "";
@@ -192,7 +256,7 @@
             }
             else
             {
-                if(u.role === "Djelatnik")
+                if(u.role === "Djelatnik" && currentUserRole === "Administrator")
                 {
                     actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'promote')\">Unaprijedi</button>";
                 }
@@ -215,7 +279,6 @@
         try
         {
             await fetch(GOOGLE_URL + "?action=manage_user&token=" + sessionToken + "&target=" + encodeURIComponent(targetEmail) + "&type=" + type);
-            loadDashboard();
         }
         catch(e)
         {
