@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Access Control | SecureGate</title>
+    <style>
+        body { background: #050505; color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { background: #0f0f0f; padding: 40px; border-radius: 8px; border-left: 5px solid #0078d4; width: 450px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+        .btn { background: #0078d4; color: white; padding: 12px 25px; text-decoration: none; border-radius: 3px; display: inline-block; margin-top: 20px; font-weight: bold; border: none; cursor: pointer; }
+        #loader { border: 3px solid #222; border-top: 3px solid #0078d4; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .key-display { background: #000; padding: 15px; border: 1px solid #0078d4; color: #00ecff; font-family: 'Courier New', monospace; margin: 20px 0; font-size: 1.2em; text-align: center; }
+        .role-tag { font-size: 0.8em; text-transform: uppercase; letter-spacing: 2px; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="box" id="app">
+        <span class="role-tag" id="role-tag">Initializing...</span>
+        <h2 id="title">Security Clearance</h2>
+        <div id="loader"></div>
+        <p id="msg">Scanning network environment...</p>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const GOOGLE_URL = "TVOJ_GOOGLE_SCRIPT_URL"; 
+        
+        const AUTH_LEVELS = {
+            "Level_1": { name: "Client", color: "#888" },
+            "Level_2": { name: "Associate Specialist", color: "#0078d4" },
+            "Level_3": { name: "Chief Security Officer", color: "#ffaa00" },
+            "Level_4": { name: "Executive Director", color: "#ff4d4d" }
+        };
+
+        async function init()
+        {
+            const authParam = params.get("Auth");
+            const envCheck = params.get("Env");
+
+            if(!authParam || !AUTH_LEVELS[authParam])
+            {
+                showError("ACCESS DENIED", "Unauthorized entry attempt detected.");
+                return;
+            }
+
+            const currentRole = AUTH_LEVELS[authParam];
+            document.getElementById("role-tag").innerText = currentRole.name;
+            document.getElementById("role-tag").style.color = currentRole.color;
+
+            if(!envCheck)
+            {
+                setTimeout(function()
+                {
+                    showError("VERIFICATION FAILED", "External environment handshake missing.");
+                }, 2000);
+                return;
+            }
+
+            document.getElementById("msg").innerText = "Validating credentials for " + currentRole.name + "...";
+            
+            setTimeout(function()
+            {
+                generateToken(authParam);
+            }, 3000);
+        }
+
+        async function generateToken(level)
+        {
+            try
+            {
+                const res = await fetch(GOOGLE_URL + "?type=generate&role=" + level);
+                const data = await res.json();
+                
+                document.getElementById("app").innerHTML = "<span class='role-tag' style='color:" + AUTH_LEVELS[level].color + "'>" + AUTH_LEVELS[level].name + "</span><h2 style='color:#00ecff'>Token Authorized</h2><p>Single-use session token generated:</p><div class='key-display'>" + data.key + "</div><button class='btn' onclick=\"navigator.clipboard.writeText('" + data.key + "').then(()=>alert('Token Copied'))\">COPY TOKEN</button><p style='font-size:0.7em; color:#555; margin-top:15px;'>Valid for 1 high-security session only.</p>";
+            }
+            catch(e)
+            {
+                showError("SERVER ERROR", "Authorization server is offline.");
+            }
+        }
+
+        function showError(title, msg)
+        {
+            document.getElementById("app").innerHTML = "<h2 style='color:#ff4d4d'>" + title + "</h2><p>" + msg + "</p>";
+        }
+
+        init();
+    </script>
+</body>
+</html>
