@@ -13,6 +13,7 @@
         .btn:hover { background: #2563eb; }
         .btn-danger { background: #ef4444; width: auto; padding: 6px 12px; margin: 2px; font-size: 0.8em; }
         .btn-success { background: #10b981; width: auto; padding: 6px 12px; margin: 2px; font-size: 0.8em; }
+        .btn-warn { background: #f59e0b; width: auto; padding: 6px 12px; margin: 2px; font-size: 0.8em; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #2d3748; padding: 10px; text-align: left; font-size: 0.9em; }
         th { background: #2d3748; color: #a0aec0; text-transform: uppercase; }
@@ -70,7 +71,7 @@
 </div>
 
 <script>
-    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwUEYmKsCMrhs77k5kPJ3m5rKji_w2n5iRKlv10j0o13jZNGwy4Ai2v6CLG1Ac8H5FFXQ/exec"; 
+    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbxTOkaQLvoYkzB2WRkykXA41XTriJIeJOPLq9PSmltpqqwPoYRneATQpW1-mhYHb5Mdfw/exec"; 
     let sessionToken = "";
     let userEmail = "";
     let autoRefreshInterval;
@@ -200,7 +201,6 @@
             
             if(data.success === false || data.forceLogout === true)
             {
-                console.log("Session invalid or user deleted. Redirecting...");
                 logout();
                 return;
             }
@@ -235,19 +235,6 @@
         }
     }
 
-    function logout()
-    {
-        localStorage.removeItem("sessionToken");
-        localStorage.removeItem("userEmail");
-        if(autoRefreshInterval)
-        {
-            clearInterval(autoRefreshInterval);
-        }
-        document.getElementById("view-dashboard").classList.add("hidden");
-        document.getElementById("view-login").classList.remove("hidden");
-        document.getElementById("login-msg").innerText = "Vaš račun je obrisan ili je sesija istekla.";
-    }
-
     function buildTable(users, currentUserRole)
     {
         const tbody = document.getElementById("users-tbody");
@@ -260,16 +247,30 @@
             
             if(u.status === "pending")
             {
-                actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'approve')\">Odobri</button>";
+                if(currentUserRole === "Administrator")
+                {
+                    actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'approve')\">Odobri</button>";
+                }
                 actionsHtml += "<button class='btn btn-danger' onclick=\"manageUser('" + email + "', 'delete')\">Odbij</button>";
             }
             else
             {
-                if(u.role === "Djelatnik" && currentUserRole === "Administrator")
+                if(currentUserRole === "Administrator")
                 {
-                    actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'promote')\">Unaprijedi</button>";
+                    if(u.role === "Djelatnik")
+                    {
+                        actionsHtml += "<button class='btn btn-success' onclick=\"manageUser('" + email + "', 'promote')\">Promoviraj</button>";
+                    }
+                    else if(u.role === "Viši Djelatnik")
+                    {
+                        actionsHtml += "<button class='btn btn-warn' onclick=\"manageUser('" + email + "', 'demote')\">Unazadi</button>";
+                    }
                 }
-                actionsHtml += "<button class='btn btn-danger' onclick=\"manageUser('" + email + "', 'delete')\">Obriši</button>";
+                
+                if(email !== "antoniorugulchdulchich@gmail.com")
+                {
+                    actionsHtml += "<button class='btn btn-danger' onclick=\"manageUser('" + email + "', 'delete')\">Obriši</button>";
+                }
             }
             
             const tr = document.createElement("tr");
