@@ -70,7 +70,7 @@
 </div>
 
 <script>
-    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwAkuv4CPBMEQgyuKdRF76FeHe1D9XnOYG6zpWGXkdrkqp7JTT8t1gfsV8xESAvvJpUCQ/exec"; 
+    const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbwUEYmKsCMrhs77k5kPJ3m5rKji_w2n5iRKlv10j0o13jZNGwy4Ai2v6CLG1Ac8H5FFXQ/exec"; 
     let sessionToken = "";
     let userEmail = "";
     let autoRefreshInterval;
@@ -198,8 +198,9 @@
             const res = await fetch(GOOGLE_URL + "?action=get_dashboard&token=" + sessionToken);
             const data = await res.json();
             
-            if(data.success === false)
+            if(data.success === false || data.forceLogout === true)
             {
+                console.log("Session invalid or user deleted. Redirecting...");
                 logout();
                 return;
             }
@@ -208,35 +209,43 @@
             {
                 document.getElementById("dash-title").innerText = "Pristup Ograničen";
                 document.getElementById("pending-alert").classList.remove("hidden");
+                document.getElementById("data-table-container").classList.add("hidden");
                 return;
             }
             
             if(data.success)
             {
-                if(!isAutoRefresh)
-                {
-                    document.getElementById("dash-role").innerText = "Vaša razina pristupa: " + data.role;
-                }
+                document.getElementById("pending-alert").classList.add("hidden");
+                document.getElementById("dash-role").innerText = "Vaša razina pristupa: " + data.role;
                 
                 if(data.role === "Klijent")
                 {
-                    document.getElementById("data-table-container").innerHTML = "<p>Dobrodošli u klijentski portal. Trenutno nemate aktivnih usluga.</p>";
-                    document.getElementById("data-table-container").classList.remove("hidden");
+                    document.getElementById("data-table-container").innerHTML = "<p>Dobrodošli u klijentski portal.</p>";
                 }
                 else
                 {
                     buildTable(data.users, data.role);
-                    document.getElementById("data-table-container").classList.remove("hidden");
                 }
+                document.getElementById("data-table-container").classList.remove("hidden");
             }
         }
         catch(e)
         {
-            if(!isAutoRefresh)
-            {
-                alert("Greška pri učitavanju podataka.");
-            }
+            console.error("Refresh error");
         }
+    }
+
+    function logout()
+    {
+        localStorage.removeItem("sessionToken");
+        localStorage.removeItem("userEmail");
+        if(autoRefreshInterval)
+        {
+            clearInterval(autoRefreshInterval);
+        }
+        document.getElementById("view-dashboard").classList.add("hidden");
+        document.getElementById("view-login").classList.remove("hidden");
+        document.getElementById("login-msg").innerText = "Vaš račun je obrisan ili je sesija istekla.";
     }
 
     function buildTable(users, currentUserRole)
